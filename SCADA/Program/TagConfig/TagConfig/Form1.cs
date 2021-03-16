@@ -1,5 +1,5 @@
 ﻿using DatabaseLib;
-using Microsoft.Office.Interop.Excel;
+using NPOI.HSSF.UserModel;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
@@ -8,7 +8,6 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Xml;
-using Excel = Microsoft.Office.Interop.Excel;
 
 namespace TagConfig
 {
@@ -455,30 +454,53 @@ namespace TagConfig
 
         private void LoadFromExcel(string file)
         {
-            Excel.Application app = new Excel.Application();
-            Workbook book = app.Workbooks.Open(file);
-            Worksheet sheet = (Worksheet)book.Sheets[1];
-            //list.Clear();
-            Dictionary<string, byte> dic = new Dictionary<string, byte>() { { "Bool", 1 }, { "SInt", 3 }, { "Word", 4 }, { "DInt", 7 }, { "Int", 4 }, { "Real", 8 }, { "String", 11 }, };
+            var intHeaderHeight = 1;
+            Dictionary<string, byte> dic = new Dictionary<string, byte>() {
+                { "Bool", 1 },
+                { "SInt", 3 },
+                { "Word", 4 },
+                { "DInt", 7 },
+                { "Int", 4 },
+                { "Real", 8 },
+                { "String", 11 },
+            };
             short maxid = list.Count == 0 ? (short)1 : list.Max(x => x.ID);
-            for (int i = 2; i < sheet.Rows.Count; i++)
+
+
+            HSSFWorkbook hssfworkbook = null;
+            using (FileStream f = new FileStream(file, FileMode.Open, FileAccess.Read))
             {
-                if (((Range)sheet.Cells[i, 2]).Value2 == null)
+                hssfworkbook = new HSSFWorkbook(f);
+            }
+            HSSFSheet sheet = (HSSFSheet)hssfworkbook.GetSheetAt(0);  // 第一个工作表
+            var rows = sheet.GetRowEnumerator();
+            HSSFRow headerRow = (HSSFRow)sheet.GetRow(intHeaderHeight);
+            int cellCount = headerRow.LastCellNum;
+            for (int i = (sheet.FirstRowNum + intHeaderHeight + 1); i <= sheet.LastRowNum; i++)
+            {
+                HSSFRow row = (HSSFRow)sheet.GetRow(i);
+                var if_null_break = row.GetCell(row.FirstCellNum + 1);
+                if (null == if_null_break)
                     break;
+
                 try
                 {
-                    TagData tag = new TagData(++maxid, curgroupId, ((Range)sheet.Cells[i, 1]).Value2.ToString(), ((Range)sheet.Cells[i, 5]).Value2.ToString().TrimStart('%'),
-                        dic[((Range)sheet.Cells[i, 3]).Value2.ToString()], Convert.ToUInt16(((Range)sheet.Cells[i, 4]).Value2),
-                         true, false, false, false, null, Convert.ToString(((Range)sheet.Cells[i, 6]).Value2), 0, 0, 0);
+                    var name = row.GetCell(row.FirstCellNum + 0).ToString();
+                    var address = row.GetCell(row.FirstCellNum + 4).ToString().TrimStart('%');
+                    var type = dic[row.GetCell(row.FirstCellNum + 2).ToString()];
+                    var size = Convert.ToUInt16(row.GetCell(row.FirstCellNum + 3));
+                    var desp = row.GetCell(row.FirstCellNum + 5).ToString();
+
+                    TagData tag = new TagData(++maxid, curgroupId, name, address, type, size, true, false, false, false, null, desp, 0, 0, 0);
                     list.Add(tag);
-                    //bindingSource1.Add(tag);
                 }
-                catch (Exception e)
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Trace.WriteLine(ex.Message);
                     continue;
-                    //Program.AddErrorLog(e);
                 }
             }
+           
             list.Sort();
             //indexList.Sort();
             start = true;
@@ -486,30 +508,50 @@ namespace TagConfig
 
         private void LoadFromKepserverCSV(string file)
         {
-            Excel.Application app = new Excel.Application();
-            Workbook book = app.Workbooks.Open(file);
-            Worksheet sheet = (Worksheet)book.Sheets[1];
             //list.Clear();
-            Dictionary<string, byte> dic = new Dictionary<string, byte>() { { "Boolean", 1 }, { "Byte", 3 }, { "Short", 4 }, { "Word", 5 }, { "DWord", 6 }, { "Long ", 7 }, { "Float", 8 }, { "String", 11 }, };
+            var intHeaderHeight = 1;
+            Dictionary<string, byte> dic = new Dictionary<string, byte>() { 
+                { "Boolean", 1 }, 
+                { "Byte", 3 }, 
+                { "Short", 4 }, 
+                { "Word", 5 }, 
+                { "DWord", 6 }, 
+                { "Long ", 7 }, 
+                { "Float", 8 }, 
+                { "String", 11 }, 
+            };
             short maxid = list.Count == 0 ? (short)1 : list.Max(x => x.ID);
-            for (int i = 2; i < sheet.Rows.Count; i++)
+
+            HSSFWorkbook hssfworkbook = null;
+            using (FileStream f = new FileStream(file, FileMode.Open, FileAccess.Read))
             {
-                var name = ((Range)sheet.Cells[i, 1]).Value2;
-                if (name == null)
+                hssfworkbook = new HSSFWorkbook(f);
+            }
+            HSSFSheet sheet = (HSSFSheet)hssfworkbook.GetSheetAt(0);  // 第一个工作表
+            var rows = sheet.GetRowEnumerator();
+            HSSFRow headerRow = (HSSFRow)sheet.GetRow(intHeaderHeight);
+            int cellCount = headerRow.LastCellNum;
+            for (int i = (sheet.FirstRowNum + intHeaderHeight + 1); i <= sheet.LastRowNum; i++)
+            {
+                HSSFRow row = (HSSFRow)sheet.GetRow(i);
+                var name = row.GetCell(row.FirstCellNum + 0);
+                if (null == name)
                     break;
+
                 try
                 {
-                    var type = dic[((Range)sheet.Cells[i, 3]).Value2.ToString()];
-                    TagData tag = new TagData(++maxid, curgroupId, name, ((Range)sheet.Cells[i, 2]).Value2.ToString().TrimStart('%'),
-                        type, (ushort)(type < 4 ? 1 : type < 6 ? 2 : type < 11 ? 4 : 255),
-                         true, false, false, false, null, Convert.ToString(((Range)sheet.Cells[i, 16]).Value2), 0, 0, 0);
+                    var address = row.GetCell(row.FirstCellNum + 1).ToString().TrimStart('%');
+                    var type = dic[row.GetCell(row.FirstCellNum + 2).ToString()];
+                    var size = (ushort)(type < 4 ? 1 : type < 6 ? 2 : type < 11 ? 4 : 255);
+                    var desp = row.GetCell(row.FirstCellNum + 15).ToString();
+
+                    TagData tag = new TagData(++maxid, curgroupId, name.ToString(), address, type, size, true, false, false, false, null, desp, 0, 0, 0);
                     list.Add(tag);
-                    //bindingSource1.Add(tag);
                 }
-                catch (Exception e)
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Trace.WriteLine(ex.Message);
                     continue;
-                    //Program.AddErrorLog(e);
                 }
             }
             list.Sort();
@@ -524,25 +566,36 @@ namespace TagConfig
 
         private void LoadAlarmFromExcel(string file)
         {
-            Excel.Application app = new Excel.Application();
-            Workbook book = app.Workbooks.Open(file);
-            Worksheet sheet = (Worksheet)book.Sheets[1];
+            var intHeaderHeight = 1;
             short maxid = list.Max(x => x.ID);
-            for (int i = 2; i < sheet.Rows.Count; i++)
+            HSSFWorkbook hssfworkbook = null;
+            using (FileStream f = new FileStream(file, FileMode.Open, FileAccess.Read))
             {
-                if (((Range)sheet.Cells[i, 1]).Value2 == null)
+                hssfworkbook = new HSSFWorkbook(f);
+            }
+            HSSFSheet sheet = (HSSFSheet)hssfworkbook.GetSheetAt(0);  // 第一个工作表
+            var rows = sheet.GetRowEnumerator();
+            HSSFRow headerRow = (HSSFRow)sheet.GetRow(intHeaderHeight);
+            int cellCount = headerRow.LastCellNum;
+            for (int i = (sheet.FirstRowNum + intHeaderHeight + 1); i <= sheet.LastRowNum; i++)
+            {
+                HSSFRow row = (HSSFRow)sheet.GetRow(i);
+                var if_null_break = row.GetCell(row.FirstCellNum + 0);
+                if (if_null_break == null)
                     break;
+
                 try
                 {
-                    string name = ((Range)sheet.Cells[i, 2]).Value2.Trim('"');
-                    string digit = "." + ((Range)sheet.Cells[i, 7]).Value2.ToString();
+                    string name = row.GetCell(row.FirstCellNum + 1).ToString().Trim('"');
+                    string digit = "." + row.GetCell(row.FirstCellNum + 6).ToString();
                     string name1 = "";
                     int index = list.BinarySearch(new TagData(curgroupId, name));
                     if (index < 0)
                     {
                         for (int j = 0; j < list.Count; j++)
                         {
-                            if (list[j].GroupID == curgroupId && list[j].Name.Contains(((Range)sheet.Cells[i, 6]).Value2.Trim('"')))
+                            var x1 = row.GetCell(row.FirstCellNum + 5).ToString().Trim('"');
+                            if (list[j].GroupID == curgroupId && list[j].Name.Contains(x1))
                             {
                                 index = j; name1 = name;
                                 break;
@@ -563,7 +616,9 @@ namespace TagConfig
                             list.Add(_tag);
                         }
                         var condition = new Condition(++Program.MAXCONDITIONID, name1, 4, 4, 0, 0, true, 0, 0);
-                        var sub = new SubCondition(true, severitys[((Range)sheet.Cells[i, 5]).Value2.ToString()], condition.TypeId, 64, 1, ((Range)sheet.Cells[i, 3]).Value2.ToString());
+                        var severity = row.GetCell(row.FirstCellNum + 4).ToString();
+                        var msg = row.GetCell(row.FirstCellNum + 2).ToString();
+                        var sub = new SubCondition(true, severitys[severity], condition.TypeId, 64, 1, msg);
                         condition.SubConditions.Add(sub);
                         conditions.Add(condition);
                         subConds.Add(sub);
@@ -575,6 +630,7 @@ namespace TagConfig
                     continue;
                 }
             }
+
             list.Sort();
         }
 
